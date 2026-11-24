@@ -16,3 +16,15 @@ class RunStatus(StrEnum):
 class Decision(StrEnum):
     APPROVED = 'approved'
     RETURNED = 'returned'
+
+
+class CorrectionStatus(StrEnum):
+    APPLIED = 'applied'
+    REJECTED = 'rejected'
+
+
+class RecommendationStatus(StrEnum):
+    IDLE = 'idle'
+    CURRENT = 'current'
+    PENDING = 'pending_update'
+    FAILED = 'update_failed'

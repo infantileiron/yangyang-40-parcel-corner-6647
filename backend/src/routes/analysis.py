@@ -9,7 +9,8 @@ from src.schemas.requests import CreateRun, ReviewInput
 from src.services.auth import current_user, roles
 from src.services.broker import wake_worker
 from src.services.errors import BusinessError
-from src.services.runs import create_run, submit_review, visible_runs
+from src.services.recommendations import ensure_recommendation_state, recommendation_view
+from src.services.runs import create_run, rerun_analysis, submit_review, visible_runs
 from src.utils.formatting import csv_text
 
 router = APIRouter(prefix='/api/runs')
@@ -18,7 +19,33 @@ router = APIRouter(prefix='/api/runs')
 @router.get('')
 def index(user=Depends(current_user)):
     with Session() as db:
-        return [run_view(run, review) for run, review in visible_runs(db, user)]
+        revision = ensure_recommendation_state(db).revision
+        return [run_view(run, review, latest_revision=revision)
+                for run, review in visible_runs(db, user)]
+
+
+@router.get('/recommendation')
+def run_recommendation(user=Depends(current_user)):
+    with Session() as db:
+        return recommendation_view(db, user)
+
+
+@router.get('/current')
+def current_run_alias(user=Depends(current_user)):
+    with Session() as db:
+        return recommendation_view(db, user)
+
+
+@router.get('/latest')
+def latest_run(user=Depends(current_user)):
+    with Session() as db:
+        pairs = visible_runs(db, user)
+        if not pairs:
+            raise BusinessError('没有可查看的分析结果', 404)
+        run, review = pairs[0]
+        revision = ensure_recommendation_state(db).revision
+        return run_view(run, review, include_result=True, latest_revision=revision,
+                        include_snapshot=True)
 
 
 @router.post('', status_code=201)
@@ -34,7 +61,19 @@ def create(request: CreateRun, user=Depends(roles(Role.ANALYST))):
 def detail(run_id: int, user=Depends(current_user)):
     with Session() as db:
         run, review = visible_runs(db, user, run_id)
-        return run_view(run, review, include_result=True)
+        revision = ensure_recommendation_state(db).revision
+        return run_view(run, review, include_result=True, latest_revision=revision,
+                        include_snapshot=True)
+
+
+@router.post('/{run_id}/recalculate', status_code=201)
+@router.post('/{run_id}/recompute', status_code=201)
+def recalculate(run_id: int, user=Depends(roles(Role.ANALYST, Role.SUPERVISOR))):
+    with Session.begin() as db:
+        item = rerun_analysis(db, run_id, user['sub'])
+        view = run_view(item)
+    wake_worker()
+    return view
 
 
 @router.post('/{run_id}/review', status_code=201)

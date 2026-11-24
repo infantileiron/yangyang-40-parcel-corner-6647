@@ -10,8 +10,11 @@ async function request(path, options = {}) {
       store.setUser(null);
       window.dispatchEvent(new Event('desk:expired'));
     }
-    const detail = await result.json().catch(() => ({}));
-    throw new Error(detail.detail || `服务请求失败（${result.status}）`);
+    const details = await result.json().catch(() => ({}));
+    const error = new Error(details.detail || `服务请求失败（${result.status}）`);
+    error.status = result.status;
+    error.details = details;
+    throw error;
   }
   return result;
 }

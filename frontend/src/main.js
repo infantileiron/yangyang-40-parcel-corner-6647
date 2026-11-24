@@ -1,4 +1,5 @@
 import { get } from './api/client.js';
+import { mountAdviceBanner } from './components/common/advice.js';
 import { frame } from './components/common/frame.js';
 import { analysisPage, wireAnalysis } from './pages/analysis.js';
 import { loginPage, wireLogin } from './pages/login.js';
@@ -36,9 +37,10 @@ async function render() {
       render();
     });
     if (current.page === 'observations') wireObservations(root, spec,render);
-    if (current.page === 'analysis') wireAnalysis(root,spec);
+    if (current.page === 'analysis') wireAnalysis(root,spec,render);
     if (current.page === 'result') wireResult(root,render);
     if (current.page === 'reports') wireReports(root,render);
+    mountAdviceBanner(root,render);
   } catch (err) {
     if (tick !== navigationTick) return;
     const standalone = `<section class="panel recovery"><h1>页面加载失败</h1><p role="alert">${esc(err.message)}</p><button class="primary" id="retry">重试</button></section>`;

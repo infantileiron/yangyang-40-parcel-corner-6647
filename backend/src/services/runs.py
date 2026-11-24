@@ -9,22 +9,50 @@ from src.domain.analysis import analyze
 from src.models.base import utc_now
 from src.models.workflow import AnalysisRun, AuditEvent, Observation, Review
 from src.services.errors import BusinessError
+from src.services.recommendations import accept_fresh_run, ensure_recommendation_state
 from src.services.validation import validated
 
 logger = logging.getLogger(__name__)
 
 
-def create_run(db, request, actor):
-    parameters = validated(SPEC['parameters'], request.parameters, defaults=True)
-    sample_ids = list(db.scalars(select(Observation.id).order_by(Observation.id)))
-    if not sample_ids:
+def queue_analysis(db, *, title, owner, parameters, base_stage=None, correction_id=None,
+                   action='run.created', detail=None, actor=None):
+    state = ensure_recommendation_state(db)
+    rows = list(db.scalars(select(Observation).order_by(Observation.id)))
+    if not rows:
         raise BusinessError('请先导入观测记录')
-    item = AnalysisRun(title=request.title, owner=actor, parameters=parameters, observation_ids=sample_ids,
-                       last_observation_id=sample_ids[-1], sample_size=len(sample_ids))
+    sample_ids = [row.id for row in rows]
+    # Correcting a row mutates the current projection. The JSON snapshot makes
+    # an already queued run immutable even before the worker picks it up.
+    sample_snapshot = [dict(row.payload) for row in rows]
+    item = AnalysisRun(
+        title=title, owner=owner, parameters=parameters, observation_ids=sample_ids,
+        sample_snapshot=sample_snapshot, last_observation_id=sample_ids[-1],
+        sample_size=len(sample_ids), data_revision=state.revision,
+        base_stage=base_stage, correction_id=correction_id,
+    )
     db.add(item)
     db.flush()
-    db.add(AuditEvent(actor=actor, action='run.created', detail=f'分析 #{item.id}，固化 {item.sample_size} 条观测'))
+    audit_detail = (detail or f'分析 #{item.id}，固化 {item.sample_size} 条观测')[:200]
+    db.add(AuditEvent(actor=actor or owner, action=action, detail=audit_detail))
     return item
+
+
+def create_run(db, request, actor):
+    parameters = validated(SPEC['parameters'], request.parameters, defaults=True)
+    return queue_analysis(db, title=request.title, owner=actor, parameters=parameters)
+
+
+def rerun_analysis(db, run_id, actor):
+    source = db.get(AnalysisRun, run_id)
+    if source is None:
+        raise BusinessError('分析不存在', 404)
+    title = f'按原条件重算：{source.title}'[:120]
+    return queue_analysis(
+        db, title=title, owner=source.owner, parameters=dict(source.parameters or {}),
+        base_stage=source.base_stage, correction_id=source.correction_id,
+        action='run.recalculate', detail=f'按分析 #{run_id} 的原条件发起重算', actor=actor,
+    )
 
 
 def visible_runs(db, user, run_id=None):
@@ -62,14 +90,27 @@ def run_pending(db):
     if item is None:
         return False
     try:
-        sample = list(db.scalars(select(Observation.payload).where(Observation.id.in_(item.observation_ids))
-                                 .order_by(Observation.id)))
+        if item.sample_snapshot is not None:
+            sample = item.sample_snapshot
+        else:
+            sample = list(db.scalars(select(Observation.payload).where(Observation.id.in_(item.observation_ids))
+                                     .order_by(Observation.id)))
         result = analyze(sample, item.parameters)
         if not {'headline', 'summary', 'metrics', 'columns', 'rows'} <= set(result):
             raise RuntimeError('invalid result schema')
+        if item.base_stage is not None:
+            result['recalculation'] = {
+                'from_stage': item.base_stage,
+                'earliest_affected_stage': item.base_stage,
+                'data_revision': item.data_revision,
+                'correction_id': item.correction_id,
+            }
+            result['base_stage'] = item.base_stage
+            result['earliest_affected_stage'] = item.base_stage
         json.dumps(result, allow_nan=False, ensure_ascii=False)
         item.result = result
         item.status = RunStatus.SUCCEEDED
+        accept_fresh_run(db, item)
     except ValueError as exc:
         item.error = str(exc)[:600] or '本次观测数据不足以完成计算'
         item.status = RunStatus.FAILED

@@ -4,13 +4,14 @@ from collections import Counter
 from sqlalchemy import func, select
 
 from src.domain.analysis import seed
-from src.models.base import Base, Session, engine
+from src.models.base import Session, engine
+from src.models.migrate import ensure_schema
 from src.models.workflow import AnalysisRun, Observation, Review, Schedule
 from src.services.observations import clean_observation, content_key
 
 
 def seed_data():
-    Base.metadata.create_all(engine)
+    ensure_schema(engine)
     rows = [clean_observation(row) for row in seed()]
     counts = Counter(content_key(row) for row in rows)
     seen = Counter()
