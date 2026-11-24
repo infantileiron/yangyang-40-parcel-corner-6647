@@ -1,0 +1,14 @@
+{
+  "slug": "yangyang-40-parcel-corner",
+  "title": "弥丘纸艺·纸雕护角跌落分段试验",
+  "direction": "贝叶斯序贯推断与末轮预测检验",
+  "layout": "rail",
+  "theme": "栗棕纸雕包装试样",
+  "recipient": "弥丘纸艺发货试制组",
+  "work_modules": [
+    "分段跌落试样",
+    "新旧护角后验分布",
+    "剩余试样预测与停止线"
+  ],
+  "follow_latest": false
+}

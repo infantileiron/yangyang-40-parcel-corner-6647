@@ -1,0 +1,95 @@
+{
+  "organization": "弥丘纸艺发货试制组",
+  "tagline": "每轮先看护角改善概率，再决定保留多少跌落架时段",
+  "source": "发货试制组按阶段录入旧、新护角的试样与折角损坏数",
+  "record_name": "护角分段跌落实验",
+  "algorithm": "Beta 后验改善概率及 Beta–Binomial 末轮预测",
+  "formula": "两护角的损坏率分别取独立 Beta(1,1) 先验，观测 k/n 后得到 Beta(1+k,1+n−k)。以数值积分计算旧组故障率减新组达到业务改善门槛的后验概率。未测完时按各组 Beta–Binomial 预测剩余损坏数，汇总末轮后验通过线的预测概率。",
+  "decision_prompt": "已足够支持扩展试投了吗，继续投入剩余架时后，最可能仍不能放行吗？",
+  "fields": [
+    {
+      "key": "stage",
+      "label": "预注册观察轮次",
+      "example": 4,
+      "type": "integer",
+      "min": 1,
+      "max": 4
+    },
+    {
+      "key": "sheet",
+      "label": "跌落试样批号",
+      "example": "MQ-X041",
+      "type": "text"
+    },
+    {
+      "key": "old_test",
+      "label": "旧护角投入数",
+      "example": 9,
+      "type": "integer",
+      "min": 1,
+      "max": 1000
+    },
+    {
+      "key": "old_fail",
+      "label": "旧护角折角损坏数",
+      "example": 3,
+      "type": "integer",
+      "min": 0,
+      "max": 1000
+    },
+    {
+      "key": "new_test",
+      "label": "新护角投入数",
+      "example": 9,
+      "type": "integer",
+      "min": 1,
+      "max": 1000
+    },
+    {
+      "key": "new_fail",
+      "label": "新护角折角损坏数",
+      "example": 0,
+      "type": "integer",
+      "min": 0,
+      "max": 1000
+    }
+  ],
+  "parameters": [
+    {
+      "key": "pass_prob",
+      "label": "扩投改善后验概率（%）",
+      "type": "number",
+      "min": 50,
+      "max": 99.9,
+      "default": 95,
+      "help": "后验改善概率达到该数值时进入人工复核。"
+    },
+    {
+      "key": "min_effect",
+      "label": "最低损坏率改善（百分点）",
+      "type": "number",
+      "min": 0,
+      "max": 80,
+      "default": 8,
+      "help": "新组损坏率至少改善此幅度。"
+    },
+    {
+      "key": "per_round",
+      "label": "剩余每轮每组计划试样数",
+      "type": "integer",
+      "min": 1,
+      "max": 10,
+      "default": 4,
+      "help": "仅作为后验预测的剩余计划，不影响已观察数据。"
+    },
+    {
+      "key": "futility",
+      "label": "提前暂缓的末轮预测通过概率下限（%）",
+      "type": "number",
+      "min": 0,
+      "max": 50,
+      "default": 2,
+      "help": "末轮达到扩投线的预测概率较低时建议暂缓。"
+    }
+  ]
+}
